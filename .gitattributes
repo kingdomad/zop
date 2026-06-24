@@ -1,0 +1,15 @@
+# ─── Line endings ──────────────────────────────────────────────
+# Force LF on all text files, regardless of OS. Eliminates the
+# "LF will be replaced by CRLF" warnings on Windows checkouts
+# and keeps diffs clean in cross-platform teams.
+*.py   text eol=lf
+*.pyi  text eol=lf
+*.toml text eol=lf
+*.cfg  text eol=lf
+*.md   text eol=lf
+*.rst  text eol=lf
+*.json text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.sh   text eol=lf
+*.txt  text eol=lf
