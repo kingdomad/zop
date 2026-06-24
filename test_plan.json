@@ -1,0 +1,8 @@
+{
+  "collections": [
+    {"name": "TestTopic1", "items": []},
+    {"name": "TestTopic2", "parent": "TestTopic1", "items": []},
+    {"name": "推荐系统", "items": []},
+    {"name": "BadTopic", "parent": "DoesNotExist", "items": []}
+  ]
+}
