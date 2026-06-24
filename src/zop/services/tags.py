@@ -50,12 +50,7 @@ class TagsService:
                 existing = {tg.get("tag", "") for tg in item["data"].get("tags", [])}
                 merged = list(existing | new_tag_set)
                 payload = {"tags": [{"tag": t} for t in sorted(merged)]}
-                resp = await api._client.patch(
-                    api._items_url(k),
-                    json=payload,
-                    headers={"If-Unmodified-Since-Version": str(item["version"])},
-                )
-                api._check(resp)
+                await api.update_item(k, payload, version=item["version"])
                 return k
 
             results = await asyncio.gather(
@@ -85,12 +80,7 @@ class TagsService:
                 existing = [tg.get("tag", "") for tg in item["data"].get("tags", [])]
                 kept = [t for t in existing if t not in remove_set]
                 payload = {"tags": [{"tag": t} for t in kept]}
-                resp = await api._client.patch(
-                    api._items_url(k),
-                    json=payload,
-                    headers={"If-Unmodified-Since-Version": str(item["version"])},
-                )
-                api._check(resp)
+                await api.update_item(k, payload, version=item["version"])
                 return k
 
             results = await asyncio.gather(

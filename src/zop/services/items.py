@@ -96,12 +96,7 @@ class ItemsService:
             payload.pop("dateAdded", None)
             payload.pop("dateModified", None)
 
-            resp = await api._client.patch(
-                api._items_url(key),
-                json=payload,
-                headers={"If-Unmodified-Since-Version": str(version)},
-            )
-            api._check(resp)
+            await api.update_item(key, payload, version=version)
         # Re-fetch from local DB (will pick up after sync)
         try:
             return self._reader.get_item(key)
@@ -116,11 +111,7 @@ class ItemsService:
         api = self._require_api()
         async with api:
             current = await api.get_item(key)
-            resp = await api._client.delete(
-                api._items_url(key),
-                headers={"If-Unmodified-Since-Version": str(current["version"])},
-            )
-            api._check(resp)
+            await api.delete_item(key, version=current["version"])
 
     async def add_by_doi(self, doi: str, *, collection_keys: Sequence[str] | None = None) -> Item:
         """Create an item from a DOI. Uses Zotero's translation API endpoint."""
@@ -131,18 +122,10 @@ class ItemsService:
             "collections": list(collection_keys or []),
         }
         async with api:
-            resp = await api._client.post(
-                f"{api._root()}/items",
-                json=[payload],
-            )
-            data = api._check(resp)
-        if not data:
-            raise ZopError(f"Failed to add item with DOI '{doi}'")
-        successful = data.get("successful", {}) if isinstance(data, dict) else {}
-        if not successful:
+            created = await api.create_items([payload])
+        if not created:
             raise ZopError(f"DOI '{doi}' not found or rejected by server")
-        first = next(iter(successful.values()))
-        return self.get(first["key"])
+        return self.get(created[0]["key"])
 
     async def add_many(self, dois: Sequence[str]) -> list[Item]:
         """Add multiple items by DOI in a single batched POST."""
@@ -152,14 +135,8 @@ class ItemsService:
             for doi in dois
         ]
         async with api:
-            resp = await api._client.post(
-                f"{api._root()}/items",
-                json=payload,
-            )
-            data = api._check(resp)
-        successful = data.get("successful", {}) if isinstance(data, dict) else {}
-        keys = [v["key"] for v in successful.values()]
-        return [self.get(k) for k in keys if k]
+            created = await api.create_items(payload)
+        return [self.get(c["key"]) for c in created if c.get("key")]
 
 
 __all__ = ["ItemsService"]

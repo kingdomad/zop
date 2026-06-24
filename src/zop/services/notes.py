@@ -36,25 +36,12 @@ class NotesService:
     async def add(self, item_key: str, text: str) -> str:
         """Create a note attached to an item. Returns the new note key."""
         api = self._require_api()
-        payload = [
-            {
-                "itemType": "note",
-                "note": text,
-                "parentItem": item_key,
-            }
-        ]
+        payload = [{"itemType": "note", "note": text, "parentItem": item_key}]
         async with api:
-            resp = await api._client.post(
-                f"{api._root()}/items",
-                json=payload,
-            )
-            data = api._check(resp)
-        if not data or not isinstance(data, dict):
-            raise ZopError("Failed to create note")
-        successful = data.get("successful", {})
-        if not successful:
+            created = await api.create_items(payload)
+        if not created:
             raise ZopError("Note creation rejected by server")
-        return cast(str, next(iter(successful.values()))["key"])
+        return cast(str, created[0]["key"])
 
 
 __all__ = ["NotesService"]
