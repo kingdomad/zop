@@ -242,7 +242,7 @@ TOTAL                               1598   1056    34%
 
 ### v0.3.0 — CI 与打包
 - [ ] GitHub Actions:push/PR 时运行 ruff + mypy + pytest
-- [ ] 验证 `uv build`(sdist + wheel)
+- [ ] 验证 `uv build`(sdist + wheel)—— 流程见 [CONTRIBUTING](../CONTRIBUTING.md#发布到-pypi)
 - [ ] 添加 `LICENSE` 文件(MIT)
 - [ ] 添加 `CHANGELOG.md`(遵循 Keep a Changelog 格式)
 - [ ] 配置 pre-commit 钩子
@@ -271,7 +271,7 @@ TOTAL                               1598   1056    34%
 - [ ] 全量类型覆盖(mypy --strict)
 - [ ] 性能预算达成:50 条目的批量移动 < 5 秒
 - [ ] 提供从 `zot` 到 `zop` 的升级路径(配置迁移脚本)
-- [ ] 发布到 PyPI
+- [ ] 发布到 PyPI —— 流程见 [CONTRIBUTING](../CONTRIBUTING.md#发布到-pypi)
 
 ## 设计决策日志
 

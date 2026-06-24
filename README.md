@@ -12,11 +12,13 @@ uv tool install zop-cli
 
 也可用 pipx:`pipx install zop-cli`,或 pip:`pip install zop-cli`。安装后命令名为 `zop`。
 
-开发安装(可编辑):
+开发安装(可编辑,含开发依赖):
 
 ```bash
-uv pip install -e .
+uv sync
 ```
+
+贡献与维护流程见 [CONTRIBUTING](CONTRIBUTING.md)。
 
 ## 配置
 
