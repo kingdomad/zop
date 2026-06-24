@@ -45,6 +45,7 @@ class ZoteroApi:
         *,
         concurrency: int = 8,
         timeout: float = 30.0,
+        transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         if not creds.library_id or not creds.api_key:
             raise AuthError("library_id and api_key are required")
@@ -58,6 +59,7 @@ class ZoteroApi:
                 "User-Agent": self.USER_AGENT,
             },
             timeout=timeout,
+            transport=transport,
         )
 
     async def __aenter__(self) -> ZoteroApi:
@@ -235,6 +237,79 @@ class ZoteroApi:
             else:
                 successes.append(cast(str, r))
         return successes, failures
+
+    async def update_item(
+        self,
+        key: str,
+        data: dict[str, Any],
+        *,
+        version: int | None = None,
+    ) -> dict[str, Any]:
+        """Patch an item's fields.
+
+        Args:
+            key: Item key.
+            data: Partial item payload (e.g. ``{"tags": [...]}`` or
+                ``{"title": ...}``). Replaces the listed fields server-side.
+            version: ``If-Unmodified-Since-Version`` for optimistic locking.
+
+        Returns:
+            The updated item dict, or an empty dict on an empty response.
+        """
+        headers: dict[str, str] = {}
+        if version is not None:
+            headers["If-Unmodified-Since-Version"] = str(version)
+        resp = await self._client.patch(self._items_url(key), json=data, headers=headers)
+        result = self._check(resp)
+        return result if isinstance(result, dict) else {}
+
+    async def delete_item(self, key: str, *, version: int | None = None) -> None:
+        """Delete an item.
+
+        Args:
+            key: Item key.
+            version: ``If-Unmodified-Since-Version``. Zotero requires this for
+                item DELETE in practice.
+        """
+        headers: dict[str, str] = {}
+        if version is not None:
+            headers["If-Unmodified-Since-Version"] = str(version)
+        resp = await self._client.delete(self._items_url(key), headers=headers)
+        self._check(resp)
+
+    async def create_items(
+        self, payloads: Sequence[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Create items via batch POST /items.
+
+        Sends payloads as a single POST body (list), chunked at
+        ``BATCH_WRITE_LIMIT``. Returns the created item dicts extracted from
+        the server's ``successful`` envelope (each contains ``key``,
+        ``version``, etc.), in the order the server reports them.
+
+        Args:
+            payloads: Item template dicts (e.g.
+                ``[{"itemType": "journalArticle", "DOI": "..."}]``).
+
+        Returns:
+            List of created items. Empty if the server rejected all entries;
+            the caller decides whether empty means an error.
+        """
+        if not payloads:
+            return []
+        results: list[dict[str, Any]] = []
+        for batch in chunked(list(payloads), self.BATCH_WRITE_LIMIT):
+            resp = await self._client.post(self._items_url(), json=list(batch))
+            data = self._check(resp)
+            if isinstance(data, dict):
+                created = data.get("successful", {})
+                if isinstance(created, dict):
+                    results.extend(created.values())
+                else:
+                    results.extend(created)
+            elif isinstance(data, list):
+                results.extend(data)
+        return results
 
 
 __all__ = ["ApiCreds", "ZoteroApi"]
