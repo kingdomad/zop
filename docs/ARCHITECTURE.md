@@ -72,7 +72,7 @@ src/zop/
 ├── _version.py               # single source of truth (hatch reads it)
 │
 ├── core/                     # cross-cutting infrastructure
-│   ├── config.py             # TOML loader, auto-fallback to zot config
+│   ├── config.py             # TOML loader (ZOP_CONFIG env or config.toml)
 │   ├── errors.py             # ZopError tree + BatchResult generic
 │   ├── envelope.py           # emit() / emit_batch() helpers
 │   └── concurrency.py        # chunked() + (unused) bounded_gather

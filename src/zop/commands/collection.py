@@ -24,7 +24,7 @@ def _service(ctx: click.Context) -> CollectionsService:
     if not cfg.data_dir:
         raise click.UsageError(
             "data_dir not configured. Run 'zop config init' or set in "
-            "~/.config/zop/config.toml or ~/.config/zot/config.toml"
+            "~/.config/zop/config.toml"
         )
     return CollectionsService(db_path=Path(cfg.data_dir) / "zotero.sqlite", creds=creds)
 

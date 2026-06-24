@@ -10,7 +10,7 @@ uv pip install -e .
 
 ## 配置
 
-新建 `~/.config/zop/config.toml`(也可复用 `~/.config/zot/config.toml`):
+新建 `~/.config/zop/config.toml`:
 
 ```toml
 [zotero]

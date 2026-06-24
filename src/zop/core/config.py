@@ -1,8 +1,8 @@
 """Configuration loader.
 
-Reads zop's own config first; falls back to ``~/.config/zot/config.toml`` so
-users can reuse their existing credentials. Supports TOML flat schema only
-in v0.1 — profile-based schema is on the roadmap.
+Reads ``~/.config/zop/config.toml`` (or an explicit path from the
+``ZOP_CONFIG`` env var). Supports a flat TOML schema only in v0.1 — a
+profile-based schema is on the roadmap.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ import platformdirs
 
 APP_NAME = "zop"
 CONFIG_FILE = Path(platformdirs.user_config_dir(APP_NAME, appauthor=False)) / "config.toml"
-ZOT_CONFIG_FILE = Path.home() / ".config" / "zot" / "config.toml"
 
 
 @dataclass
@@ -44,20 +43,15 @@ def load_config(path: Path | None = None) -> AppConfig:
     """Load configuration from disk.
 
     Lookup order:
-    1. ``ZOP_CONFIG`` env var (override path)
-    2. ``<config_dir>/zop/config.toml`` (this app's config)
-    3. ``~/.config/zot/config.toml`` (reuse existing zot config)
+    1. ``ZOP_CONFIG`` env var (explicit override path)
+    2. ``<config_dir>/zop/config.toml`` (default location)
     """
     if path is None:
         path = Path(os.environ["ZOP_CONFIG"]) if "ZOP_CONFIG" in os.environ else None
 
-    data: dict[str, object] = {}
-    if path is not None:
-        data = _load_toml(path)
-    else:
-        data = _load_toml(CONFIG_FILE) or _load_toml(ZOT_CONFIG_FILE)
+    data = _load_toml(path) if path is not None else _load_toml(CONFIG_FILE)
 
-    # Flat schema: [zotero] section (compatible with zot).
+    # Flat schema: [zotero] section.
     z = data.get("zotero", {}) if isinstance(data, dict) else {}
     if not isinstance(z, dict):
         z = {}
@@ -69,4 +63,4 @@ def load_config(path: Path | None = None) -> AppConfig:
     )
 
 
-__all__ = ["CONFIG_FILE", "ZOT_CONFIG_FILE", "AppConfig", "load_config"]
+__all__ = ["CONFIG_FILE", "AppConfig", "load_config"]
