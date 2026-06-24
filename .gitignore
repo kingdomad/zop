@@ -1,0 +1,49 @@
+# ─── Python build artifacts ────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+wheels/
+
+# ─── Virtual environments ──────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ─── Test & coverage artifacts ─────────────────────────────────
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.pytest_cache/
+
+# ─── Linter & type-checker caches ──────────────────────────────
+.mypy_cache/
+.ruff_cache/
+
+# ─── Claude Code local config ──────────────────────────────────
+# Plugin settings, skills, per-machine state — never commit
+.claude/
+CLAUDE.local.md
+
+# ─── Editor / IDE ──────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ─── OS metadata ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Logs ──────────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── Local secrets & environment overrides ─────────────────────
+.env
+.env.*
+!.env.example
