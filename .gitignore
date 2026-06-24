@@ -22,9 +22,10 @@ coverage.xml
 .mypy_cache/
 .ruff_cache/
 
-# ─── Claude Code local config ──────────────────────────────────
+# ─── Local agent/tool config ───────────────────────────────────
 # Plugin settings, skills, per-machine state — never commit
 .claude/
+.serena/
 CLAUDE.local.md
 
 # ─── Editor / IDE ──────────────────────────────────────────────

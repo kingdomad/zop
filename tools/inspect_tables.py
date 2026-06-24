@@ -1,7 +1,7 @@
 import shutil
 import sqlite3
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 src = Path(r'D:\Program Data\zotero\zotero.sqlite')
 tmp = Path(tempfile.gettempdir()) / 'zop_zotero_snapshot.sqlite'

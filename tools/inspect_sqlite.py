@@ -1,8 +1,7 @@
 import shutil
 import sqlite3
-import time
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 src = Path(r'D:\Program Data\zotero\zotero.sqlite')
 # Copy to temp (avoid lock contention)
