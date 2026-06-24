@@ -47,6 +47,16 @@ zop collection plan plan.json --dry-run        # 校验批量计划
 zop collection plan plan.json --execute       # 执行批量计划
 ```
 
+## Agent skill
+
+为 AI 编程助手(Claude Code、Codex、Cursor 等)配套了一个 [agent skill](https://skills.sh),教 agent 如何调用 `zop`、解析 JSON 信封输出、以及批量 plan 的 dry-run → execute 流程:
+
+```bash
+npx skills add kingdomad/zop --skill zop -a claude-code -y
+```
+
+详见 [`skills/zop/SKILL.md`](skills/zop/SKILL.md)。
+
 ## 与 `zot` 的差异
 
 - **真正的批量**:创建集合使用 Zotero 的批量 POST(每请求 50 条)
