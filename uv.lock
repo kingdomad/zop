@@ -569,7 +569,7 @@ wheels = [
 ]
 
 [[package]]
-name = "zop"
+name = "zop-cli"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

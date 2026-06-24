@@ -4,6 +4,16 @@
 
 ## 安装
 
+从 PyPI 安装(推荐):
+
+```bash
+uv tool install zop-cli
+```
+
+也可用 pipx:`pipx install zop-cli`,或 pip:`pip install zop-cli`。安装后命令名为 `zop`。
+
+开发安装(可编辑):
+
 ```bash
 uv pip install -e .
 ```

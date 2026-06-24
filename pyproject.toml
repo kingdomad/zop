@@ -1,9 +1,10 @@
 [project]
-name = "zop"
+name = "zop-cli"
 dynamic = ["version"]
 description = "High-throughput Zotero CLI focused on batch operations and automation"
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "zop contributors" }]
 requires-python = ">=3.12"
 keywords = ["zotero", "cli", "batch", "bibliography"]
