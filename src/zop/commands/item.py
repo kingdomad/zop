@@ -125,7 +125,7 @@ def delete_cmd(keys: tuple[str, ...], yes: bool) -> None:
             )
             out: list[tuple[str, Exception | None]] = []
             for k, r in zip(keys, results, strict=True):
-                if isinstance(r, BaseException):
+                if isinstance(r, Exception):
                     out.append((k, r))
                 else:
                     out.append((k, None))

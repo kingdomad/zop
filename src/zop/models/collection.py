@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from zop.models.common import ID_PATTERN
@@ -36,7 +38,7 @@ class CollectionTree(BaseModel):
     item_count: int = 0
     children: list[CollectionTree] = Field(default_factory=list)
 
-    def walk(self) -> list[CollectionTree]:
+    def walk(self) -> Iterator[CollectionTree]:
         """Pre-order traversal (self before descendants)."""
         yield self
         for child in self.children:

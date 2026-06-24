@@ -347,7 +347,8 @@ class SqliteReader:
             ).fetchone()
         if not row or not row[0]:
             return None
-        rel_path, att_key = row
+        rel_path: str = row[0]
+        att_key: str = row[1]
         # Path is "storage:<filename>" — the actual location is
         # <data_dir>/storage/<attachment_key>/<filename>
         if rel_path.startswith("storage:"):

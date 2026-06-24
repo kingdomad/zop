@@ -3,11 +3,21 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TypedDict
 
 from pypdf import PdfReader
 
 from zop.adapters.sqlite_reader import SqliteReader
 from zop.core.errors import NotFoundError, ZopError
+
+
+class OutlineEntry(TypedDict):
+    """A flat PDF outline entry: one bookmark, indexed by depth."""
+
+    section: int
+    title: str
+    page: int | None
+    depth: int
 
 
 class PdfService:
@@ -45,11 +55,11 @@ class PdfService:
             total += len(txt)
         return "\n\n".join(chunks)
 
-    def get_outline(self, item_key: str) -> list[dict[str, object]]:
+    def get_outline(self, item_key: str) -> list[OutlineEntry]:
         """Return the PDF outline (bookmarks) as a flat list."""
         path = self.get_attachment_path(item_key)
         reader = PdfReader(str(path))
-        out: list[dict[str, object]] = []
+        out: list[OutlineEntry] = []
 
         def _walk(items: object, depth: int) -> None:
             if not isinstance(items, list):
@@ -65,7 +75,8 @@ class PdfService:
                 elif raw_title is not None:
                     title = str(raw_title)
                 try:
-                    page_num = reader.get_destination_page_number(item) + 1
+                    raw_page = reader.get_destination_page_number(item)  # type: ignore[arg-type]
+                    page_num: int | None = raw_page + 1 if raw_page is not None else None
                 except Exception:
                     page_num = None
                 out.append(
@@ -89,19 +100,19 @@ class PdfService:
                 f"Section {section_number} not in outline (1-{len(outline)})"
             )
         # Find the next sibling/depth-0 section to know where to stop
-        start_page = outline[section_number - 1].get("page")  # type: ignore[assignment]
+        start_page: int | None = outline[section_number - 1]["page"]
         end_page: int | None = None
         for next_sec in outline[section_number:]:
-            if next_sec["depth"] <= outline[section_number - 1]["depth"]:  # type: ignore[comparison-overlap]
-                end_page = next_sec.get("page")  # type: ignore[assignment]
+            if next_sec["depth"] <= outline[section_number - 1]["depth"]:
+                end_page = next_sec["page"]
                 break
         path = self.get_attachment_path(item_key)
         reader = PdfReader(str(path))
-        start_page = 1 if start_page is None else int(start_page)
-        end_page = len(reader.pages) if end_page is None else int(end_page) - 1
+        start_idx = 0 if start_page is None else start_page - 1
+        end_idx = len(reader.pages) if end_page is None else end_page - 1
         chunks: list[str] = []
         total = 0
-        for i in range(start_page - 1, min(end_page, len(reader.pages))):
+        for i in range(start_idx, min(end_idx, len(reader.pages))):
             try:
                 txt = reader.pages[i].extract_text() or ""
             except Exception:
@@ -116,4 +127,4 @@ class PdfService:
         return f"# {outline[section_number - 1]['title']}\n\n" + "\n\n".join(chunks)
 
 
-__all__ = ["PdfService"]
+__all__ = ["OutlineEntry", "PdfService"]

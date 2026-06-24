@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -171,7 +171,7 @@ class ZoteroApi:
         if version is not None:
             headers["If-Unmodified-Since-Version"] = str(version)
         resp = await self._client.patch(self._coll_url(key), json=payload, headers=headers)
-        return self._check(resp)
+        return cast("dict[str, Any]", self._check(resp))
 
     async def delete_collection(self, key: str, *, version: int | None = None) -> None:
         """Delete a collection. CASCADE: deletes all subcollections."""
@@ -185,7 +185,7 @@ class ZoteroApi:
 
     async def get_item(self, key: str) -> dict[str, Any]:
         resp = await self._client.get(self._items_url(key))
-        return self._check(resp)
+        return cast("dict[str, Any]", self._check(resp))
 
     async def update_item_collections(
         self, key: str, collections: list[str], *, version: int | None = None
@@ -197,7 +197,7 @@ class ZoteroApi:
         resp = await self._client.patch(
             self._items_url(key), json={"collections": collections}, headers=headers
         )
-        return self._check(resp)
+        return cast("dict[str, Any]", self._check(resp))
 
     async def batch_update_item_collections(
         self,
@@ -230,10 +230,10 @@ class ZoteroApi:
         successes: list[str] = []
         failures: list[tuple[str, Exception]] = []
         for (k, _, _), r in zip(updates, results, strict=True):
-            if isinstance(r, BaseException):
+            if isinstance(r, Exception):
                 failures.append((k, r))
             else:
-                successes.append(r)
+                successes.append(cast(str, r))
         return successes, failures
 
 

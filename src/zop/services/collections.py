@@ -313,10 +313,10 @@ class CollectionsService:
             fetch_failures: list[tuple[str, Exception]] = []
             for r in fetched:
                 if len(r) == 3 and isinstance(r[1], list):
-                    _, colls, ver = r  # type: ignore[misc]
+                    _, colls, ver = r
                     updates.append((r[0], colls, ver))
                 else:
-                    fetch_failures.append((r[0], r[1]))  # type: ignore[arg-type]
+                    fetch_failures.append((r[0], r[1]))
 
             ok, move_failures = await api.batch_update_item_collections(updates)
 

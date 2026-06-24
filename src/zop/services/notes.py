@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 from zop.adapters.sqlite_reader import SqliteReader
 from zop.adapters.zotero_api import ApiCreds, ZoteroApi
@@ -53,7 +54,7 @@ class NotesService:
         successful = data.get("successful", {})
         if not successful:
             raise ZopError("Note creation rejected by server")
-        return next(iter(successful.values()))["key"]
+        return cast(str, next(iter(successful.values()))["key"])
 
 
 __all__ = ["NotesService"]

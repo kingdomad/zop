@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Sequence
 from pathlib import Path
+from typing import cast
 
 from zop.adapters.sqlite_reader import SqliteReader
 from zop.adapters.zotero_api import ApiCreds, ZoteroApi
@@ -63,10 +64,10 @@ class TagsService:
         ok: list[str] = []
         fail: list[tuple[str, Exception]] = []
         for k, r in zip(item_keys, results, strict=True):
-            if isinstance(r, BaseException):
+            if isinstance(r, Exception):
                 fail.append((k, r))
             else:
-                ok.append(r)
+                ok.append(cast(str, r))
         return ok, fail
 
     async def remove(
@@ -95,13 +96,13 @@ class TagsService:
             results = await asyncio.gather(
                 *[_one(k) for k in item_keys], return_exceptions=True
             )
-        ok = []
-        fail = []
+        ok: list[str] = []
+        fail: list[tuple[str, Exception]] = []
         for k, r in zip(item_keys, results, strict=True):
-            if isinstance(r, BaseException):
+            if isinstance(r, Exception):
                 fail.append((k, r))
             else:
-                ok.append(r)
+                ok.append(cast(str, r))
         return ok, fail
 
 

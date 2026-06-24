@@ -26,5 +26,5 @@ class ItemType(StrEnum):
     UNKNOWN = "unknown"
 
     @classmethod
-    def _missing_(cls, value: object) -> ItemType:  # type: ignore[override]
+    def _missing_(cls, value: object) -> ItemType:
         return cls.UNKNOWN

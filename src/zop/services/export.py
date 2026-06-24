@@ -102,7 +102,9 @@ def _escape_bibtex(s: str) -> str:
     return s.replace("{", "\\{").replace("}", "\\}").replace("$", "\\$")
 
 
-def _extract_year(date: str) -> str:
+def _extract_year(date: str | None) -> str:
+    if date is None:
+        return ""
     m = re.search(r"\d{4}", date)
     return m.group(0) if m else ""
 
