@@ -15,7 +15,7 @@ Install, then point it at a library:
 uv tool install zop-cli          # the command is `zop`
 ```
 
-Config at `~/.config/zop/config.toml` (or `$ZOP_CONFIG`):
+Config search order: `$ZOP_CONFIG` → platform dir (Windows `%LOCALAPPDATA%\zop\`, macOS `~/Library/Application Support/zop/`, Linux `~/.config/zop/`) → `~/.config/zop/config.toml`. Put it at any of these:
 
 ```toml
 [zotero]
@@ -67,9 +67,9 @@ Always `json.loads(stdout)` and branch on `ok`. Never string-match the output.
 
 | Goal | Command |
 |------|---------|
-| Create collection (+ parent by name) | `zop collection create "Name" [--parent "ParentName"]` |
+| Create collection (+ parent) | `zop collection create "Name" [--parent "ParentKeyOrName"]` |
 | Delete collection (cascades) | `zop collection delete <KEY> [-y]` |
-| Move collection under new parent | `zop collection reparent <KEY> [--parent "Name"]` |
+| Move collection under new parent | `zop collection reparent <KEY> [--parent "KeyOrName"]` |
 | Move items into a collection | `zop collection move <K1> <K2> --to <KEY>` |
 | Update item metadata | `zop item update <KEY> [--title ...] [--set K=V]` |
 | Add items by DOI | `zop item add --doi 10.x/y [--doi ...] [--from-file dois.txt]` |
@@ -78,7 +78,7 @@ Always `json.loads(stdout)` and branch on `ok`. Never string-match the output.
 | Remove tags | `zop tag remove <KEY...> --tags t1,t2` |
 | Add a note | `zop note add <KEY> --text "..." [--file note.md]` |
 
-Name→key resolution is automatic in write commands (`--parent "Name"`), so accept either from the user.
+Parent references accept a KEY or a NAME in write commands (`--parent "KeyOrName"`); a NAME is resolved locally first, then via the Web API if not yet synced. Accept either from the user.
 
 ### Batch reorg (zop's highlight)
 
@@ -86,7 +86,7 @@ Author a plan JSON, **dry-run to validate**, then execute:
 
 ```bash
 zop collection plan plan.json --dry-run      # checks name conflicts, parent resolution, item existence
-zop collection plan plan.json --execute      # topologically creates collections in waves
+zop collection plan plan.json --execute      # creates collections (topo order), then moves items into them
 ```
 
 Plan shape:
@@ -105,3 +105,4 @@ For every flag of any command, run `zop <command> --help` rather than guessing.
 - **For multi-step reorgs, author a plan and `--dry-run`** — let zop validate conflicts; don't reimplement the checks.
 - **Batch writes isolate failures**: `collection move`, `tag add/remove`, and `item delete` return per-item success/failure in one envelope and don't abort the batch. Report which keys failed from the `failed` array; exit code `2` means partial failure.
 - **Versions matter for writes**: if a write fails with `conflict`, the item changed server-side — re-read and retry rather than looping blindly.
+- **Reads lag writes briefly**: writes hit the Web API, reads use the local SQLite snapshot. A just-created collection/item isn't visible to read commands until Zotero syncs it (seconds to minutes). To chain creates, pass the returned KEY (e.g. `--parent <KEY>`) rather than the new NAME — or rely on the NAME→API fallback.
