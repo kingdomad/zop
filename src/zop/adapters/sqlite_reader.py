@@ -51,8 +51,9 @@ class SqliteReader:
                        c.version, c.synced, p.key AS parent_key,
                        (SELECT COUNT(*) FROM collectionItems ci
                           JOIN items i ON i.itemID = ci.itemID
+                          JOIN itemTypes it ON it.itemTypeID = i.itemTypeID
                           WHERE ci.collectionID = c.collectionID
-                            AND i.itemTypeID NOT IN (1, 14)) AS item_count
+                            AND it.typeName NOT IN ('attachment', 'note', 'annotation')) AS item_count
                 FROM collections c
                 LEFT JOIN collections p ON p.collectionID = c.parentCollectionID
                 WHERE c.libraryID = ?
@@ -259,7 +260,7 @@ class SqliteReader:
                 FROM items i
                 JOIN itemTypes it ON it.itemTypeID = i.itemTypeID
                 WHERE i.libraryID = ?
-                  AND i.itemTypeID NOT IN (1, 14)  -- exclude attachments & notes
+                  AND it.typeName NOT IN ('attachment', 'note', 'annotation')
                   AND (
                     EXISTS (SELECT 1 FROM itemData id JOIN fields f ON f.fieldID=id.fieldID
                               JOIN itemDataValues iv ON iv.valueID=id.valueID
@@ -304,7 +305,7 @@ class SqliteReader:
                 FROM items i
                 JOIN itemTypes it ON it.itemTypeID = i.itemTypeID
                 WHERE i.libraryID = ?
-                  AND i.itemTypeID NOT IN (1, 14)
+                  AND it.typeName NOT IN ('attachment', 'note', 'annotation')
                   AND i.dateAdded >= datetime('now', ?)
                 ORDER BY i.dateAdded DESC
                 LIMIT ?
@@ -362,14 +363,16 @@ class SqliteReader:
         """Return counts: total items, by type, top tags, collection count, etc."""
         with self._connect() as con:
             total = con.execute(
-                "SELECT COUNT(*) FROM items WHERE libraryID=? AND itemTypeID NOT IN (1,14)",
+                "SELECT COUNT(*) FROM items WHERE libraryID=? "
+                "AND itemTypeID NOT IN (SELECT itemTypeID FROM itemTypes "
+                "WHERE typeName IN ('attachment', 'note', 'annotation'))",
                 (library_id,),
             ).fetchone()[0]
             by_type_rows = con.execute(
                 """
                 SELECT it.typeName, COUNT(*) FROM items i
                 JOIN itemTypes it ON it.itemTypeID = i.itemTypeID
-                WHERE i.libraryID=? AND i.itemTypeID NOT IN (1,14)
+                WHERE i.libraryID=? AND it.typeName NOT IN ('attachment', 'note', 'annotation')
                 GROUP BY it.typeName ORDER BY 2 DESC
                 """,
                 (library_id,),
@@ -448,7 +451,9 @@ class SqliteReader:
                     JOIN fields f ON f.fieldID = id.fieldID
                     JOIN itemDataValues iv ON iv.valueID = id.valueID
                     JOIN items i ON i.itemID = id.itemID
+                    JOIN itemTypes it ON it.itemTypeID = i.itemTypeID
                     WHERE f.fieldName = 'DOI' AND i.libraryID = ?
+                      AND it.typeName NOT IN ('attachment', 'note', 'annotation')
                       AND iv.value IS NOT NULL AND iv.value != ''
                     GROUP BY iv.value
                     HAVING COUNT(*) > 1
@@ -465,7 +470,9 @@ class SqliteReader:
                     JOIN fields f ON f.fieldID = id.fieldID
                     JOIN itemDataValues iv ON iv.valueID = id.valueID
                     JOIN items i ON i.itemID = id.itemID
+                    JOIN itemTypes it ON it.itemTypeID = i.itemTypeID
                     WHERE f.fieldName = 'title' AND i.libraryID = ?
+                      AND it.typeName NOT IN ('attachment', 'note', 'annotation')
                       AND iv.value IS NOT NULL AND iv.value != ''
                     GROUP BY iv.value
                     HAVING COUNT(*) > 1

@@ -63,6 +63,12 @@ def schema_db(tmp_path: Path) -> Path:
             orderIndex INT DEFAULT 0,
             PRIMARY KEY (collectionID, itemID)
         );
+        -- list_collections()'s item_count subquery JOINs itemTypes; the table
+        -- must exist even though this fixture inserts no items.
+        CREATE TABLE itemTypes (
+            itemTypeID INTEGER PRIMARY KEY,
+            typeName TEXT
+        );
         INSERT INTO collections(collectionID, collectionName, parentCollectionID, libraryID, key)
         VALUES
             (1, 'ExistingParent', NULL, 1, 'PARENT01'),
