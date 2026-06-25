@@ -100,20 +100,22 @@ def fake_db(tmp_path: Path) -> Iterator[Path]:
     return db
 
 
-def test_stats_excludes_non_bibliographic_types(fake_db: Path) -> None:
+def test_stats_counts_annotations(fake_db: Path) -> None:
     svc = LibraryService(db_path=fake_db)
     s = svc.stats()
-    # 4 journalArticle + 1 document; note/attachment/annotation excluded.
-    assert s["total_items"] == 5
+    # stats is a full library overview: journalArticle + document + annotation
+    # are counted; only attachment/note are excluded. annotation IS counted
+    # (it has no title, so it stays out of recent/search, but shows in by_type).
+    assert s["total_items"] == 6  # 4 journalArticle + 1 document + 1 annotation
     assert s["pdf_attachments"] == 2
     assert s["collections"] == 1
     assert s["top_tags"]["cs.AI"] == 2
     by_type = s["by_type"]
     assert "journalArticle" in by_type
     assert "document" in by_type  # must NOT be dropped (BUG-1)
+    assert "annotation" in by_type  # counted in stats overview (user intent)
     assert "note" not in by_type
     assert "attachment" not in by_type
-    assert "annotation" not in by_type
 
 
 def test_recent_keeps_document_drops_others(fake_db: Path) -> None:

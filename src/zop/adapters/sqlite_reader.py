@@ -368,14 +368,14 @@ class SqliteReader:
             total = con.execute(
                 "SELECT COUNT(*) FROM items WHERE libraryID=? "
                 "AND itemTypeID NOT IN (SELECT itemTypeID FROM itemTypes "
-                "WHERE typeName IN ('attachment', 'note', 'annotation'))",
+                "WHERE typeName IN ('attachment', 'note'))",
                 (library_id,),
             ).fetchone()[0]
             by_type_rows = con.execute(
                 """
                 SELECT it.typeName, COUNT(*) FROM items i
                 JOIN itemTypes it ON it.itemTypeID = i.itemTypeID
-                WHERE i.libraryID=? AND it.typeName NOT IN ('attachment', 'note', 'annotation')
+                WHERE i.libraryID=? AND it.typeName NOT IN ('attachment', 'note')
                 GROUP BY it.typeName ORDER BY 2 DESC
                 """,
                 (library_id,),
