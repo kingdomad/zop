@@ -239,3 +239,56 @@ async def test_reparent_fetches_version_when_not_provided(
     fake_api.get_collection.assert_awaited_once_with("K")
     assert fake_api.update_collection.await_count == 1
     assert fake_api.update_collection.call_args.kwargs["version"] == 5
+
+
+# ---- create: --parent accepts KEY + API fallback (BUG-7) ----
+
+
+async def test_create_accepts_parent_key_directly(
+    fake_db: Path,
+    creds: ApiCreds,
+    fake_api: AsyncMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_api.create_collections.return_value = [
+        {
+            "key": "CHILD001",
+            "version": 1,
+            "data": {"name": "child", "parentCollection": "PARENT01"},
+        }
+    ]
+    monkeypatch.setattr(CollectionsService, "_require_api", lambda self: fake_api)
+    svc = CollectionsService(db_path=fake_db, creds=creds)
+
+    await svc.create("child", parent="PARENT01")  # an 8-char KEY
+
+    payload = fake_api.create_collections.call_args.args[0][0]
+    assert payload["parentCollection"] == "PARENT01"
+    # KEY path must not scan local names or hit the API list endpoint.
+    fake_api.list_collections.assert_not_awaited()
+
+
+async def test_create_falls_back_to_api_for_unknown_name(
+    fake_db: Path,
+    creds: ApiCreds,
+    fake_api: AsyncMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_api.list_collections.return_value = [
+        {"key": "APIKEY01", "data": {"name": "RemoteParent"}}
+    ]
+    fake_api.create_collections.return_value = [
+        {
+            "key": "CHILD001",
+            "version": 1,
+            "data": {"name": "child", "parentCollection": "APIKEY01"},
+        }
+    ]
+    monkeypatch.setattr(CollectionsService, "_require_api", lambda self: fake_api)
+    svc = CollectionsService(db_path=fake_db, creds=creds)
+
+    await svc.create("child", parent="RemoteParent")  # not in local DB
+
+    fake_api.list_collections.assert_awaited_once()
+    payload = fake_api.create_collections.call_args.args[0][0]
+    assert payload["parentCollection"] == "APIKEY01"

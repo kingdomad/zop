@@ -73,13 +73,13 @@ def items_cmd(ctx: click.Context, key: str) -> None:
 
 @collection.command("create")
 @click.argument("name")
-@click.option("--parent", "parent_name", default=None, help="Parent collection NAME.")
+@click.option("--parent", "parent_ref", default=None, help="Parent collection KEY or NAME.")
 @click.pass_context
-def create_cmd(ctx: click.Context, name: str, parent_name: str | None) -> None:
-    """Create a collection (NAME). Requires API key."""
+def create_cmd(ctx: click.Context, name: str, parent_ref: str | None) -> None:
+    """Create a collection (NAME). Parent may be a KEY or NAME. Requires API key."""
     try:
         svc = _service(ctx)
-        result = asyncio.run(svc.create(name, parent=parent_name))
+        result = asyncio.run(svc.create(name, parent=parent_ref))
         emit([result.model_dump()], human=_human(), count=1)
     except ZopError as e:
         emit_error(e, human=_human())

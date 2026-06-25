@@ -11,6 +11,7 @@ This layer:
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -24,6 +25,7 @@ from zop.core.errors import (
     ZopError,
 )
 from zop.models.collection import Collection, CollectionTree
+from zop.models.common import ID_PATTERN
 
 
 @dataclass
@@ -171,13 +173,17 @@ class CollectionsService:
         *,
         parent: str | None = None,
     ) -> Collection:
-        """Create one collection. `parent` is the parent NAME."""
+        """Create one collection.
+
+        ``parent`` may be a collection KEY (8-char) or NAME. KEY is used
+        directly; NAME is resolved locally, then (if not yet synced, e.g.
+        a just-created parent) via the Web API.
+        """
         api = self._require_api()
-        payload: dict[str, object] = {"name": name}
-        if parent:
-            p = self.resolve(parent)
-            payload["parentCollection"] = p.key
         async with api:
+            payload: dict[str, object] = {"name": name}
+            if parent:
+                payload["parentCollection"] = await self._resolve_parent(api, parent)
             result = await api.create_collections([payload])
         if not result:
             raise ZopError(f"Failed to create '{name}' (empty response)")
@@ -188,6 +194,25 @@ class CollectionsService:
             parent_key=r["data"].get("parentCollection") or None,
             version=r["version"],
         )
+
+    async def _resolve_parent(self, api: ZoteroApi, parent: str) -> str:
+        """Resolve a parent reference (KEY or NAME) to a collection key.
+
+        KEY is used as-is. NAME is looked up locally first, then via the
+        Web API so a just-created parent (not yet in local SQLite) works.
+        """
+        if re.fullmatch(ID_PATTERN, parent):
+            return parent
+        try:
+            return self.resolve(parent).key
+        except NotFoundError:
+            remote = await api.list_collections()
+            for coll in remote:
+                if coll.get("data", {}).get("name") == parent:
+                    key = coll.get("key")
+                    if key:
+                        return str(key)
+            raise NotFoundError(f"No collection named '{parent}' (local or remote)") from None
 
     async def create_many(self, plan: list[PlanNode]) -> list[Collection]:
         """Create all collections in a validated plan (batched POST, topologically ordered).
