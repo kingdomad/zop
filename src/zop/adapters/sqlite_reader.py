@@ -16,7 +16,7 @@ from pathlib import Path
 from zop.core.errors import NotFoundError, ValidationError
 from zop.models.collection import Collection, CollectionTree
 from zop.models.common import ItemType
-from zop.models.item import Item, ItemSummary
+from zop.models.item import Item, ItemSummary, parse_year
 
 
 class SqliteReader:
@@ -201,6 +201,7 @@ class SqliteReader:
             tags=tags,
             collections=colls,
             version=version,
+            year=parse_year(date),
             date=date,
             date_added=str(date_added) if date_added else None,
             date_modified=str(date_modified) if date_modified else None,
@@ -282,6 +283,7 @@ class SqliteReader:
                 item_type=ItemType(r[1]) if r[1] else ItemType.UNKNOWN,
                 title=r[4] or "",
                 creators=[c.strip() for c in (r[3] or "").split(";") if c.strip()],
+                year=parse_year(r[5]),
                 date=r[5],
             )
             for r in rows
@@ -318,6 +320,7 @@ class SqliteReader:
                 item_type=ItemType(r[1]) if r[1] else ItemType.UNKNOWN,
                 title=r[4] or "",
                 creators=[c.strip() for c in (r[3] or "").split(";") if c.strip()],
+                year=parse_year(r[5]),
                 date=r[5],
             )
             for r in rows

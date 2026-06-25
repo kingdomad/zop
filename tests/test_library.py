@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from zop.adapters.sqlite_reader import SqliteReader
 from zop.services.library import LibraryService
 
 
@@ -30,13 +31,15 @@ def fake_db(tmp_path: Path) -> Iterator[Path]:
             dateAdded TIMESTAMP,
             dateModified TIMESTAMP,
             libraryID INT,
-            key TEXT
+            key TEXT,
+            version INT DEFAULT 0
         );
         CREATE TABLE itemTypes (itemTypeID INTEGER PRIMARY KEY, typeName TEXT);
         CREATE TABLE itemAttachments (itemID INT, parentItemID INT, contentType TEXT, linkMode INT);
         CREATE TABLE itemTags (itemID INT, tagID INT);
         CREATE TABLE tags (tagID INTEGER PRIMARY KEY, name TEXT);
         CREATE TABLE collections (collectionID INTEGER PRIMARY KEY, libraryID INT, key TEXT);
+        CREATE TABLE collectionItems (collectionID INT, itemID INT);
         CREATE TABLE itemData (itemID INT, fieldID INT, valueID INT);
         CREATE TABLE itemDataValues (valueID INTEGER PRIMARY KEY, value TEXT);
         CREATE TABLE fields (fieldID INTEGER PRIMARY KEY, fieldName TEXT);
@@ -52,7 +55,7 @@ def fake_db(tmp_path: Path) -> Iterator[Path]:
             (28, 'note');
         INSERT INTO fields VALUES (1, 'title'), (22, 'DOI'), (12, 'date');
 
-        INSERT INTO items VALUES
+        INSERT INTO items (itemID, itemTypeID, dateAdded, dateModified, libraryID, key) VALUES
             (1, 17, datetime('now','-5 days'), datetime('now'), 1, 'JOURN001'),
             (2, 17, datetime('now','-4 days'), datetime('now'), 1, 'JOURN002'),
             (3, 14, datetime('now','-3 days'), datetime('now'), 1, 'DOCUM001'),
@@ -85,6 +88,12 @@ def fake_db(tmp_path: Path) -> Iterator[Path]:
         -- DOIs (for duplicates by DOI).
         INSERT INTO itemDataValues VALUES (20, '10.1234/shared');
         INSERT INTO itemData VALUES (7, 22, 20), (8, 22, 20);
+
+        -- Dates (for year parsing — BUG-3).
+        INSERT INTO itemDataValues VALUES (30, '2024-05-01');
+        INSERT INTO itemData VALUES (1, 12, 30);
+        INSERT INTO itemDataValues VALUES (31, '2024-01-01 2024-01-01');
+        INSERT INTO itemData VALUES (7, 12, 31);
     """)
     con.commit()
     con.close()
@@ -119,6 +128,9 @@ def test_recent_keeps_document_drops_others(fake_db: Path) -> None:
     assert "ANNO0001" not in keys
     leaked = {it.item_type.value for it in items} & {"note", "attachment", "annotation"}
     assert not leaked
+    # year must be parsed from the raw date string (BUG-3).
+    journ = next(it for it in items if it.key == "JOURN001")
+    assert journ.year == 2024
 
 
 def test_duplicates_by_doi(fake_db: Path) -> None:
@@ -135,3 +147,10 @@ def test_duplicates_by_title_excludes_attachment_placeholders(fake_db: Path) -> 
     assert set(dupes["Real Paper"]) == {"DUPJK001", "DUPJK002"}
     # Attachment placeholder titles shared by multiple PDFs must NOT be flagged (BUG-4).
     assert "Full Text PDF" not in dupes
+
+
+def test_get_item_populates_year(fake_db: Path) -> None:
+    # year must be populated on the full Item, not just summaries (BUG-3).
+    reader = SqliteReader(fake_db)
+    item = reader.get_item("JOURN001")
+    assert item.year == 2024

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from zop.adapters.sqlite_reader import SqliteReader
 from zop.core.errors import ZopError
-from zop.models.item import Item
+from zop.models.item import Item, parse_year
 
 
 class ExportService:
@@ -103,10 +103,8 @@ def _escape_bibtex(s: str) -> str:
 
 
 def _extract_year(date: str | None) -> str:
-    if date is None:
-        return ""
-    m = re.search(r"\d{4}", date)
-    return m.group(0) if m else ""
+    year = parse_year(date)
+    return str(year) if year is not None else ""
 
 
 def _make_bibtex_key(item: Item) -> str:
