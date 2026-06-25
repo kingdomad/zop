@@ -120,6 +120,15 @@ class ZoteroApi:
             start += len(data)
         return out
 
+    async def get_collection(self, key: str) -> dict[str, Any]:
+        """Fetch a single collection by key (GET /collections/{key}).
+
+        Used to read the current ``version`` for the If-Unmodified-Since-
+        Version header before a PATCH/DELETE.
+        """
+        resp = await self._client.get(self._coll_url(key))
+        return cast("dict[str, Any]", self._check(resp))
+
     async def create_collections(
         self, payloads: Sequence[dict[str, Any]]
     ) -> list[dict[str, Any]]:

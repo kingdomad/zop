@@ -156,6 +156,28 @@ async def test_create_items_chunks_at_write_limit(creds: ApiCreds) -> None:
     assert len(result) == 51
 
 
+# ---- get_collection ----
+
+
+async def test_get_collection_gets_single_collection(creds: ApiCreds) -> None:
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        return httpx.Response(
+            200, json={"key": "K", "version": 9, "data": {"name": "n"}}
+        )
+
+    async with ZoteroApi(creds, transport=httpx.MockTransport(handler)) as api:
+        result = await api.get_collection("K")
+
+    assert seen["method"] == "GET"
+    assert seen["path"].endswith("/users/12345/collections/K")
+    assert result["key"] == "K"
+    assert result["version"] == 9
+
+
 # ---- _check status-code mapping ----
 
 

@@ -261,7 +261,10 @@ class CollectionsService:
     async def delete(self, key: str) -> None:
         api = self._require_api()
         async with api:
-            await api.delete_collection(key)
+            # Zotero requires If-Unmodified-Since-Version for collection
+            # DELETE; fetch the current version first (mirrors ItemsService).
+            current = await api.get_collection(key)
+            await api.delete_collection(key, version=current["version"])
 
     async def reparent(
         self, key: str, new_parent: str | None, *, version: int | None = None
@@ -274,6 +277,9 @@ class CollectionsService:
         else:
             parent_key = self.resolve(new_parent).key
         async with api:
+            if version is None:
+                current = await api.get_collection(key)
+                version = current["version"]
             r = await api.update_collection(key, parent_key=parent_key, version=version)
         return Collection(
             key=r["key"],

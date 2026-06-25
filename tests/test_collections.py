@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -191,3 +192,50 @@ def test_sentinel_distinguishes_no_change() -> None:
     """Ensure sentinel is not None/False, so 'no change' is distinct from 'set to None'."""
     assert _SENTINEL is not None
     assert _SENTINEL is not False
+
+
+# ---- write paths: version handling (BUG-8) ----
+
+
+async def test_delete_fetches_version_before_delete(
+    fake_db: Path,
+    creds: ApiCreds,
+    fake_api: AsyncMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_api.get_collection.return_value = {"key": "K", "version": 5, "data": {"name": "n"}}
+    monkeypatch.setattr(CollectionsService, "_require_api", lambda self: fake_api)
+    svc = CollectionsService(db_path=fake_db, creds=creds)
+
+    await svc.delete("K")
+
+    # Collection PATCH/DELETE need If-Unmodified-Since-Version; the service
+    # must fetch the current version first (mirroring ItemsService.delete).
+    fake_api.get_collection.assert_awaited_once_with("K")
+    fake_api.delete_collection.assert_awaited_once_with("K", version=5)
+
+
+async def test_reparent_fetches_version_when_not_provided(
+    fake_db: Path,
+    creds: ApiCreds,
+    fake_api: AsyncMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_api.get_collection.return_value = {
+        "key": "K",
+        "version": 5,
+        "data": {"name": "n", "parentCollection": False},
+    }
+    fake_api.update_collection.return_value = {
+        "key": "KEY00001",
+        "version": 6,
+        "data": {"name": "n", "parentCollection": False},
+    }
+    monkeypatch.setattr(CollectionsService, "_require_api", lambda self: fake_api)
+    svc = CollectionsService(db_path=fake_db, creds=creds)
+
+    await svc.reparent("K", None)  # detach to top-level
+
+    fake_api.get_collection.assert_awaited_once_with("K")
+    assert fake_api.update_collection.await_count == 1
+    assert fake_api.update_collection.call_args.kwargs["version"] == 5
