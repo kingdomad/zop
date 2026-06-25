@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from zop.adapters.zotero_api import ApiCreds
-from zop.core.errors import AuthError, ZopError
+from zop.core.errors import AuthError, NotFoundError, ZopError
 from zop.models.common import ItemType
 from zop.models.item import Item
 from zop.services.items import ItemsService
@@ -98,6 +98,39 @@ async def test_add_by_doi_raises_when_rejected(
 
     with pytest.raises(ZopError):
         await svc.add_by_doi("bad")
+
+
+async def test_add_by_doi_falls_back_when_not_synced(
+    fake_db: Path,
+    creds: ApiCreds,
+    fake_api: AsyncMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Just-created item not yet in local SQLite (BUG-9): must not crash.
+    new_key = "NEW00001"
+    fake_api.create_items.return_value = [
+        {
+            "key": new_key,
+            "version": 1,
+            "data": {
+                "itemType": "journalArticle",
+                "DOI": "10.1234/x",
+                "title": "From API",
+            },
+        }
+    ]
+    monkeypatch.setattr(ItemsService, "_require_api", lambda self: fake_api)
+    svc = ItemsService(db_path=fake_db, creds=creds)
+
+    def _raise(*a: object, **k: object) -> Item:
+        raise NotFoundError("not in local DB")
+
+    monkeypatch.setattr(svc._reader, "get_item", _raise)
+
+    result = await svc.add_by_doi("10.1234/x")
+
+    assert result.key == new_key
+    assert result.title == "From API"  # built from API response, no false error
 
 
 async def test_add_many_returns_item_per_created_key(

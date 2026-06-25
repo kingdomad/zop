@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from zop.adapters.sqlite_reader import SqliteReader
 from zop.adapters.zotero_api import ApiCreds, ZoteroApi
 from zop.core.errors import AuthError, NotFoundError, ZopError
-from zop.models.item import Item, ItemSummary
+from zop.models.common import ItemType
+from zop.models.item import Item, ItemSummary, parse_year
 
 
 class ItemsService:
@@ -125,7 +127,7 @@ class ItemsService:
             created = await api.create_items([payload])
         if not created:
             raise ZopError(f"DOI '{doi}' not found or rejected by server")
-        return self.get(created[0]["key"])
+        return await self._item_after_create(created[0])
 
     async def add_many(self, dois: Sequence[str]) -> list[Item]:
         """Add multiple items by DOI in a single batched POST."""
@@ -136,7 +138,43 @@ class ItemsService:
         ]
         async with api:
             created = await api.create_items(payload)
-        return [self.get(c["key"]) for c in created if c.get("key")]
+        return [await self._item_after_create(c) for c in created if c.get("key")]
+
+    async def _item_after_create(self, created: dict[str, Any]) -> Item:
+        """Return the created item: local DB if synced, else from API response.
+
+        A just-created item is not in local SQLite until Zotero syncs it
+        (BUG-9), so a strict local read would falsely report failure while
+        the item already exists server-side. Prefer local; fall back to the
+        API response so the caller gets the new key without a false error.
+        """
+        key = created.get("key")
+        if not key:
+            raise ZopError("Server created item but returned no key")
+        try:
+            return self._reader.get_item(str(key))
+        except NotFoundError:
+            return self._item_from_api_response(created)
+
+    def _item_from_api_response(self, created: dict[str, Any]) -> Item:
+        """Build a best-effort Item from a create_items API response.
+
+        Fields absent from the response (creators, etc.) are left empty;
+        they populate after Zotero syncs the new item to local SQLite.
+        """
+        data = created.get("data")
+        if not isinstance(data, dict):
+            data = {}
+        date_str = str(data["date"]) if data.get("date") else None
+        return Item(
+            key=str(created["key"]),
+            item_type=ItemType(str(data.get("itemType", ""))),
+            title=str(data.get("title", "")),
+            doi=str(data["DOI"]) if data.get("DOI") else None,
+            url=str(data["url"]) if data.get("url") else None,
+            date=date_str,
+            year=parse_year(date_str),
+        )
 
 
 __all__ = ["ItemsService"]
