@@ -1,8 +1,10 @@
 """Configuration loader.
 
-Reads ``~/.config/zop/config.toml`` (or an explicit path from the
-``ZOP_CONFIG`` env var). Supports a flat TOML schema only in v0.1 — a
-profile-based schema is on the roadmap.
+Reads config from the first existing of: an explicit path, the
+``ZOP_CONFIG`` env var, the platform-specific user config dir
+(``platformdirs``), or ``~/.config/zop/config.toml`` as a fallback.
+Supports a flat TOML schema only in v0.1 — a profile-based schema is on
+the roadmap.
 """
 
 from __future__ import annotations
@@ -42,14 +44,27 @@ def _load_toml(path: Path) -> dict[str, object]:
 def load_config(path: Path | None = None) -> AppConfig:
     """Load configuration from disk.
 
-    Lookup order:
-    1. ``ZOP_CONFIG`` env var (explicit override path)
-    2. ``<config_dir>/zop/config.toml`` (default location)
+    Lookup order (first existing file wins):
+    1. explicit ``path`` argument
+    2. ``ZOP_CONFIG`` env var (explicit override)
+    3. platform-specific user config dir (``platformdirs``: on Windows
+       ``%LOCALAPPDATA%\\zop``, on macOS ``~/Library/Application Support/zop``,
+       on Linux ``~/.config/zop``)
+    4. ``~/.config/zop/config.toml`` fallback (Unix convention, cross-platform)
     """
-    if path is None:
-        path = Path(os.environ["ZOP_CONFIG"]) if "ZOP_CONFIG" in os.environ else None
-
-    data = _load_toml(path) if path is not None else _load_toml(CONFIG_FILE)
+    if path is not None:
+        data = _load_toml(path)
+    else:
+        candidates: list[Path] = []
+        if "ZOP_CONFIG" in os.environ:
+            candidates.append(Path(os.environ["ZOP_CONFIG"]))
+        candidates.append(CONFIG_FILE)
+        candidates.append(Path.home() / ".config" / "zop" / "config.toml")
+        data = {}
+        for candidate in candidates:
+            if candidate.exists():
+                data = _load_toml(candidate)
+                break
 
     # Flat schema: [zotero] section.
     z = data.get("zotero", {}) if isinstance(data, dict) else {}

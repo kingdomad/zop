@@ -22,7 +22,7 @@ uv sync
 
 ## 配置
 
-新建 `~/.config/zop/config.toml`:
+zop 按以下顺序查找配置(首个存在的文件生效):`ZOP_CONFIG` 环境变量 → 平台配置目录(platformdirs)→ `~/.config/zop/config.toml`。平台配置目录:Windows 为 `%LOCALAPPDATA%\zop\`、macOS 为 `~/Library/Application Support/zop/`、Linux 为 `~/.config/zop/`。在任一位置创建 `config.toml`:
 
 ```toml
 [zotero]
