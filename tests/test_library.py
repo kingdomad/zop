@@ -45,6 +45,7 @@ def fake_db(tmp_path: Path) -> Iterator[Path]:
         CREATE TABLE fields (fieldID INTEGER PRIMARY KEY, fieldName TEXT);
         CREATE TABLE itemCreators (itemID INT, creatorID INT, orderIndex INT);
         CREATE TABLE creators (creatorID INTEGER PRIMARY KEY, firstName TEXT, lastName TEXT);
+        CREATE TABLE itemNotes (itemID INT, parentItemID INT, note TEXT);
 
         -- Deliberately non-standard itemTypeID mapping (exposes BUG-1).
         INSERT INTO itemTypes VALUES
@@ -72,6 +73,11 @@ def fake_db(tmp_path: Path) -> Iterator[Path]:
         INSERT INTO itemTags VALUES (1, 1), (1, 2), (2, 1);
         INSERT INTO tags VALUES (1, 'cs.AI'), (2, 'to-read');
         INSERT INTO collections VALUES (1, 1, 'COLL0001');
+
+        -- A child note item (itemID 10) attached to JOURN001 (itemID 1) — for #2.
+        INSERT INTO items (itemID, itemTypeID, dateAdded, dateModified, libraryID, key) VALUES
+            (10, 28, datetime('now','-1 days'), datetime('now'), 1, 'NOTEX001');
+        INSERT INTO itemNotes VALUES (10, 1, 'A note on Paper One');
 
         -- Titles (for duplicates by title + recent display).
         INSERT INTO itemDataValues VALUES (10, 'Paper One');
@@ -156,3 +162,19 @@ def test_get_item_populates_year(fake_db: Path) -> None:
     reader = SqliteReader(fake_db)
     item = reader.get_item("JOURN001")
     assert item.year == 2024
+
+
+def test_get_item_notes_includes_parent_key(fake_db: Path) -> None:
+    """#2: note list must surface parent_key so callers can attribute a note to
+    its item. The JOIN to the parent item already exists; the SELECT must include
+    parent.key and the returned dict must carry it (not be silently absent).
+    """
+    reader = SqliteReader(fake_db)
+    notes = reader.get_item_notes("JOURN001")
+    assert len(notes) == 1
+    note = notes[0]
+    assert note["key"] == "NOTEX001"
+    assert note["note"] == "A note on Paper One"
+    assert note["parent_key"] == "JOURN001"  # the fix
+    assert note["date_added"]  # non-empty
+    assert note["date_modified"]

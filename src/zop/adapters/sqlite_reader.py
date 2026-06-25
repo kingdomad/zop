@@ -412,7 +412,7 @@ class SqliteReader:
         with self._connect() as con:
             rows = con.execute(
                 """
-                SELECT i.key, n.note, i.dateAdded, i.dateModified
+                SELECT i.key, n.note, i.dateAdded, i.dateModified, parent.key
                 FROM itemNotes n
                 JOIN items i ON i.itemID = n.itemID
                 JOIN items parent ON parent.itemID = n.parentItemID
@@ -421,8 +421,20 @@ class SqliteReader:
                 """,
                 (item_key, library_id),
             ).fetchall()
-        return [{"key": r[0], "note": r[1] or "", "date_added": str(r[2]) if r[2] else "",
-                 "date_modified": str(r[3]) if r[3] else ""} for r in rows if r[0]]
+        # parent_key: the parent item's key. The JOIN to `parent` already existed
+        # but the SELECT never read parent.key, so callers couldn't attribute a
+        # note to its item (#2).
+        return [
+            {
+                "key": r[0],
+                "note": r[1] or "",
+                "date_added": str(r[2]) if r[2] else "",
+                "date_modified": str(r[3]) if r[3] else "",
+                "parent_key": r[4],
+            }
+            for r in rows
+            if r[0]
+        ]
 
     def list_all_tags(self, library_id: int = 1) -> list[dict[str, int | str]]:
         with self._connect() as con:
