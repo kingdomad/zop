@@ -43,6 +43,8 @@ Every command prints exactly one JSON object to stdout:
 
 Always `json.loads(stdout)` and branch on `ok`. Never string-match the output.
 
+**`export` is special**: in non-tty/JSON mode it returns `{ok, data: {format, content, count}}` where `content` is the raw bibtex/ris string or the csl-json array. In tty mode (or with `--out FILE`) it writes the raw format directly (pipe-friendly: `zop export K > refs.bib`).
+
 ## Commands
 
 ### Reads (offline, no key needed)
@@ -97,6 +99,8 @@ Plan shape:
 
 Always inspect the dry-run `unresolved_parents` / `conflicts` before `--execute`. Intra-plan parents (a new collection whose parent is another new collection) are supported and created in topological order.
 
+On `--execute`, the envelope reports `assignments_done` (`[item_key, coll_key]` pairs actually moved) and `assignments_failed` (`[item_key, error]`). Items move via the API, so they land in the new collections even before Zotero syncs them locally.
+
 For every flag of any command, run `zop <command> --help` rather than guessing.
 
 ## Working as an agent
@@ -106,3 +110,4 @@ For every flag of any command, run `zop <command> --help` rather than guessing.
 - **Batch writes isolate failures**: `collection move`, `tag add/remove`, and `item delete` return per-item success/failure in one envelope and don't abort the batch. Report which keys failed from the `failed` array; exit code `2` means partial failure.
 - **Versions matter for writes**: if a write fails with `conflict`, the item changed server-side — re-read and retry rather than looping blindly.
 - **Reads lag writes briefly**: writes hit the Web API, reads use the local SQLite snapshot. A just-created collection/item isn't visible to read commands until Zotero syncs it (seconds to minutes). To chain creates, pass the returned KEY (e.g. `--parent <KEY>`) rather than the new NAME — or rely on the NAME→API fallback.
+- **stats vs recent count differently**: `stats` is a full overview — it counts annotations/highlights in `total_items` and `by_type`. `recent`/`search`/`duplicates` list only bibliographic items (annotations have no title, so they'd be empty noise in a list). Don't expect the two counts to match.
