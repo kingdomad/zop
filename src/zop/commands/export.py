@@ -59,13 +59,21 @@ def export_cmd(
                 Path(out).write_text(str(payload), encoding="utf-8")
             emit({"written": out, "count": len(items)}, human=_human())
         else:
-            if fmt == "csl-json":
-                import json
-                sys.stdout.write(json.dumps(payload, indent=2, ensure_ascii=False))
-                sys.stdout.write("\n")
+            if _human():
+                # Human/tty: raw output (pipe-friendly, e.g. zop export K > refs.bib).
+                if fmt == "csl-json":
+                    import json
+                    sys.stdout.write(json.dumps(payload, indent=2, ensure_ascii=False))
+                    sys.stdout.write("\n")
+                else:
+                    sys.stdout.write(str(payload))
+                sys.stdout.flush()
             else:
-                sys.stdout.write(str(payload))
-            sys.stdout.flush()
+                # JSON/agent: wrap in the standard envelope.
+                emit(
+                    {"format": fmt, "content": payload, "count": len(items)},
+                    human=False,
+                )
     except ZopError as e:
         emit_error(e, human=_human())
         sys.exit(1)
