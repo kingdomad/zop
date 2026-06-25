@@ -106,13 +106,13 @@ def delete_cmd(ctx: click.Context, key: str, yes: bool) -> None:
 
 @collection.command("reparent")
 @click.argument("key")
-@click.option("--parent", "parent_name", default=None, help="New parent NAME (omit for top-level).")
+@click.option("--parent", "parent_ref", default=None, help="New parent KEY or NAME (omit for top-level).")
 @click.pass_context
-def reparent_cmd(ctx: click.Context, key: str, parent_name: str | None) -> None:
+def reparent_cmd(ctx: click.Context, key: str, parent_ref: str | None) -> None:
     """Move a collection under a new parent (or to top-level). Requires API key."""
     try:
         svc = _service(ctx)
-        result = asyncio.run(svc.reparent(key, parent_name))
+        result = asyncio.run(svc.reparent(key, parent_ref))
         emit([result.model_dump()], human=_human(), count=1)
     except ZopError as e:
         emit_error(e, human=_human())

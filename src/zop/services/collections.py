@@ -294,14 +294,19 @@ class CollectionsService:
     async def reparent(
         self, key: str, new_parent: str | None, *, version: int | None = None
     ) -> Collection:
-        """Move collection under new parent (NAME), or detach if new_parent is None."""
+        """Move collection under a new parent (KEY or NAME), or detach if None.
 
+        ``new_parent`` may be a collection KEY (8-char) or NAME, resolved the same
+        way as ``create``'s ``--parent`` (KEY first, then local name, then the
+        Web API for a parent not yet in local SQLite). This matches SKILL.md's
+        ``--parent "KeyOrName"`` contract shared by all collection write commands.
+        """
         api = self._require_api()
-        if new_parent is None:
-            parent_key: str | None | object = False  # detach
-        else:
-            parent_key = self.resolve(new_parent).key
         async with api:
+            if new_parent is None:
+                parent_key: str | None | object = False  # detach to top-level
+            else:
+                parent_key = await self._resolve_parent(api, new_parent)
             if version is None:
                 current = await api.get_collection(key)
                 version = current["version"]

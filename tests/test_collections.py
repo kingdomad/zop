@@ -268,6 +268,33 @@ async def test_reparent_returns_updated_state_after_empty_patch(
     assert result.version == 6
 
 
+async def test_reparent_accepts_parent_key_directly(
+    fake_db: Path,
+    creds: ApiCreds,
+    fake_api: AsyncMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#1: reparent --parent must accept an 8-char KEY (like create), not just a NAME.
+    Passing a KEY short-circuits name lookup — no list_collections scan. Regression
+    for ``reparent <KEY> --parent <父KEY>`` failing with ``No collection named '<KEY>'``.
+    """
+    fake_api.update_collection.return_value = {}  # 204 No Content
+    fake_api.get_collection.return_value = {
+        "key": "KEY00001",
+        "version": 6,
+        "data": {"name": "child", "parentCollection": "PARENT01"},
+    }
+    monkeypatch.setattr(CollectionsService, "_require_api", lambda self: fake_api)
+    svc = CollectionsService(db_path=fake_db, creds=creds)
+
+    await svc.reparent("KEY00001", "PARENT01")  # an 8-char KEY, not a NAME
+
+    # KEY path must not scan collection names via the API
+    fake_api.list_collections.assert_not_awaited()
+    # update_collection must receive the raw KEY as parent_key
+    assert fake_api.update_collection.call_args.kwargs["parent_key"] == "PARENT01"
+
+
 # ---- create: --parent accepts KEY + API fallback (BUG-7) ----
 
 
