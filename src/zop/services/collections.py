@@ -353,5 +353,33 @@ class CollectionsService:
 
         return ok, fetch_failures + move_failures
 
+    async def execute_assignments(
+        self,
+        assignments: list[tuple[str, str]],
+        created_by_name: dict[str, str],
+    ) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+        """Move items into their target collections after plan creation.
+
+        Reuses move_items (API GET + bounded-concurrent PATCH), so it works
+        even though the newly-created collections aren't in local SQLite
+        yet — target keys come from create_many's response, not the snapshot.
+        Returns (done, failed) as lists of (item_key, coll_key_or_error).
+        """
+        by_coll: dict[str, list[str]] = {}
+        unresolved: list[str] = []
+        for item_key, coll_name in assignments:
+            coll_key = created_by_name.get(coll_name)
+            if coll_key is None:
+                unresolved.append(item_key)
+                continue
+            by_coll.setdefault(coll_key, []).append(item_key)
+        done: list[tuple[str, str]] = []
+        failed: list[tuple[str, str]] = [(it, "collection not created") for it in unresolved]
+        for coll_key, items in by_coll.items():
+            ok, fails = await self.move_items(items, coll_key)
+            done.extend((it, coll_key) for it in ok)
+            failed.extend((it, str(e)) for it, e in fails)
+        return done, failed
+
 
 __all__ = ["CollectionsService", "PlanNode", "PlanReport"]

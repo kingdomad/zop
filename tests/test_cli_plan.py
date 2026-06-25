@@ -12,6 +12,7 @@ import importlib
 import json
 import sqlite3
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 from click.testing import CliRunner
@@ -146,3 +147,49 @@ def test_plan_dry_run_valid_plan_exits_zero(
     out = json.loads(result.output)
     assert out["data"]["ok"] is True
     assert out["data"]["to_create"][0]["name"] == "BrandNew"
+
+
+def test_plan_execute_runs_assignments(
+    monkeypatch: pytest.MonkeyPatch,
+    schema_db: Path,
+    tmp_path: Path,
+    creds: ApiCreds,
+    fake_api: AsyncMock,
+) -> None:
+    """--execute must actually move items into the new collections (BUG-10)."""
+    # Item must exist locally for validate_plan to accept the assignment.
+    con = sqlite3.connect(schema_db)
+    con.execute(
+        "INSERT INTO items(itemID, itemTypeID, libraryID, key) VALUES (1, 17, 1, 'ITM00001')"
+    )
+    con.commit()
+    con.close()
+
+    fake_api.create_collections.return_value = [
+        {
+            "key": "NEWCOLL1",
+            "version": 1,
+            "data": {"name": "BrandNew", "parentCollection": False},
+        }
+    ]
+    fake_api.get_item.return_value = {"version": 1, "data": {"collections": []}}
+    fake_api.batch_update_item_collections.return_value = (["ITM00001"], [])
+
+    svc = CollectionsService(db_path=schema_db, creds=creds)
+    monkeypatch.setattr(CollectionsService, "_require_api", lambda self: fake_api)
+    monkeypatch.setattr(coll_mod, "_service", lambda ctx: svc)
+    monkeypatch.setattr(coll_mod, "_human", lambda: False)
+
+    plan = tmp_path / "ok.json"
+    plan.write_text(
+        json.dumps({"collections": [{"name": "BrandNew", "items": ["ITM00001"]}]}),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(coll_mod.plan_cmd, [str(plan), "--execute"])
+
+    assert result.exit_code == 0
+    out = json.loads(result.output)
+    # Assignment must actually execute, not be left "pending".
+    assert out["data"]["assignments_done"]
+    assert fake_api.batch_update_item_collections.await_count == 1

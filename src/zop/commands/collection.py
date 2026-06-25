@@ -13,6 +13,7 @@ from zop.adapters.zotero_api import ApiCreds
 from zop.core.config import load_config
 from zop.core.envelope import emit, emit_batch, emit_error
 from zop.core.errors import ZopError
+from zop.models.collection import Collection
 from zop.services.collections import CollectionsService, PlanNode
 
 
@@ -199,17 +200,24 @@ def plan_cmd(
         if not report.ok:
             emit(out, human=_human())
             sys.exit(2)
-        created = asyncio.run(svc.create_many(plan))
+        async def _execute() -> tuple[list[Collection], list[tuple[str, str]], list[tuple[str, str]]]:
+            created = await svc.create_many(plan)
+            created_by_name = {c.name: c.key for c in created}
+            done, failed = await svc.execute_assignments(
+                report.item_assignments, created_by_name
+            )
+            return created, done, failed
+
+        created, done, failed = asyncio.run(_execute())
         emit(
             {
                 "created": [c.model_dump() for c in created],
-                "assignments_pending": report.item_assignments,
+                "assignments_done": done,
+                "assignments_failed": failed,
             },
             human=_human(),
             count=len(created),
         )
-        # Note: item assignment to newly-created collections would go here
-        # in a follow-up step (separate API call after collections exist).
     except ZopError as e:
         emit_error(e, human=_human())
         sys.exit(1)
