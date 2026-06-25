@@ -178,6 +178,24 @@ async def test_get_collection_gets_single_collection(creds: ApiCreds) -> None:
     assert result["version"] == 9
 
 
+# ---- update_collection ----
+
+
+async def test_update_collection_empty_body_returns_empty_dict(creds: ApiCreds) -> None:
+    """BUG-11: Zotero PATCH /collections/{key} returns 204 No Content (empty
+    body). update_collection must yield {} (like update_item), not None — a
+    ``None`` return crashes any caller that subscripts the result (reparent).
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(204)  # no content
+
+    async with ZoteroApi(creds, transport=httpx.MockTransport(handler)) as api:
+        result = await api.update_collection("K", parent_key="P", version=5)
+
+    assert result == {}
+
+
 # ---- _check status-code mapping ----
 
 

@@ -222,23 +222,50 @@ async def test_reparent_fetches_version_when_not_provided(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_api.get_collection.return_value = {
-        "key": "K",
+        "key": "KEY00001",
         "version": 5,
         "data": {"name": "n", "parentCollection": False},
     }
-    fake_api.update_collection.return_value = {
+    fake_api.update_collection.return_value = {}  # 204 No Content
+    monkeypatch.setattr(CollectionsService, "_require_api", lambda self: fake_api)
+    svc = CollectionsService(db_path=fake_db, creds=creds)
+
+    await svc.reparent("KEY00001", None)  # detach to top-level
+
+    # get_collection called twice: once to read the version, once to re-read
+    # the updated state (PATCH /collections/{key} returns no body — BUG-11).
+    assert fake_api.get_collection.await_count == 2
+    assert all(c.args == ("KEY00001",) for c in fake_api.get_collection.call_args_list)
+    assert fake_api.update_collection.await_count == 1
+    assert fake_api.update_collection.call_args.kwargs["version"] == 5
+
+
+async def test_reparent_returns_updated_state_after_empty_patch(
+    fake_db: Path,
+    creds: ApiCreds,
+    fake_api: AsyncMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """BUG-11: PATCH /collections/{key} returns 204 No Content → update_collection
+    yields {}. reparent must NOT subscript the patch response; it re-reads the
+    collection to build the result, so it returns a Collection instead of
+    raising ``TypeError: 'NoneType' object is not subscriptable``.
+    """
+    fake_api.update_collection.return_value = {}  # real 204 behavior
+    fake_api.get_collection.return_value = {
         "key": "KEY00001",
         "version": 6,
-        "data": {"name": "n", "parentCollection": False},
+        "data": {"name": "ExistingParent", "parentCollection": "PARENT01"},
     }
     monkeypatch.setattr(CollectionsService, "_require_api", lambda self: fake_api)
     svc = CollectionsService(db_path=fake_db, creds=creds)
 
-    await svc.reparent("K", None)  # detach to top-level
+    # "ExistingParent" resolves locally to PARENT01; reparent KEY00001 under it.
+    result = await svc.reparent("KEY00001", "ExistingParent")
 
-    fake_api.get_collection.assert_awaited_once_with("K")
-    assert fake_api.update_collection.await_count == 1
-    assert fake_api.update_collection.call_args.kwargs["version"] == 5
+    assert result.key == "KEY00001"
+    assert result.parent_key == "PARENT01"
+    assert result.version == 6
 
 
 # ---- create: --parent accepts KEY + API fallback (BUG-7) ----

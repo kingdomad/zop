@@ -172,6 +172,11 @@ class ZoteroApi:
             parent_key: New parent key. Pass ``None`` or ``False`` to detach to
                 top-level. Default (sentinel) leaves parent unchanged.
             version: If-Unmodified-Since-Version for optimistic locking.
+
+        Returns:
+            The updated collection dict, or an empty dict on an empty response.
+            Zotero answers single-object PATCHes with ``204 No Content``, so
+            callers must not subscript the result to read fields.
         """
         payload: dict[str, Any] = {}
         if name is not None:
@@ -182,7 +187,8 @@ class ZoteroApi:
         if version is not None:
             headers["If-Unmodified-Since-Version"] = str(version)
         resp = await self._client.patch(self._coll_url(key), json=payload, headers=headers)
-        return cast("dict[str, Any]", self._check(resp))
+        result = self._check(resp)
+        return result if isinstance(result, dict) else {}
 
     async def delete_collection(self, key: str, *, version: int | None = None) -> None:
         """Delete a collection. CASCADE: deletes all subcollections."""

@@ -305,12 +305,17 @@ class CollectionsService:
             if version is None:
                 current = await api.get_collection(key)
                 version = current["version"]
-            r = await api.update_collection(key, parent_key=parent_key, version=version)
+            # Zotero PATCH /collections/{key} returns 204 No Content (no body),
+            # so the patch response carries no fields to read. Re-read the
+            # collection to return its true updated state (new version, name,
+            # parent) — subscripting the patch response crashes (BUG-11).
+            await api.update_collection(key, parent_key=parent_key, version=version)
+            updated = await api.get_collection(key)
         return Collection(
-            key=r["key"],
-            name=r["data"]["name"],
-            parent_key=r["data"].get("parentCollection") or None,
-            version=r["version"],
+            key=updated["key"],
+            name=updated["data"]["name"],
+            parent_key=updated["data"].get("parentCollection") or None,
+            version=updated["version"],
         )
 
     async def move_items(
