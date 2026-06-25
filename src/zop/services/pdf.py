@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from pypdf import PdfReader
 
@@ -18,6 +18,41 @@ class OutlineEntry(TypedDict):
     title: str
     page: int | None
     depth: int
+
+
+def _resolve_page_number(reader: PdfReader, dest: Any) -> int | None:
+    """Resolve a 1-indexed page number for an outline destination.
+
+    Tries ``get_destination_page_number`` directly, then falls back to
+    named destinations (whose ``/Dest`` is a name string rather than an
+    explicit page array — the direct method returns None for those).
+    """
+    try:
+        num = reader.get_destination_page_number(dest)
+    except Exception:
+        num = None
+    if num is not None:
+        return num + 1
+    # Named-destination fallback: resolve the name, then its page.
+    target: object = None
+    get = getattr(dest, "get", None)
+    if callable(get):
+        target = get("/Dest")
+        if target is None:
+            action = get("/A")
+            action_get = getattr(action, "get", None)
+            if callable(action_get):
+                target = action_get("/D")
+    if isinstance(target, str):
+        named = reader.named_destinations.get(target)
+        if named is not None:
+            try:
+                num = reader.get_destination_page_number(named)
+            except Exception:
+                num = None
+            if num is not None:
+                return num + 1
+    return None
 
 
 class PdfService:
@@ -74,11 +109,7 @@ class PdfService:
                     title = str(raw_title.get("/Title", ""))
                 elif raw_title is not None:
                     title = str(raw_title)
-                try:
-                    raw_page = reader.get_destination_page_number(item)  # type: ignore[arg-type]
-                    page_num: int | None = raw_page + 1 if raw_page is not None else None
-                except Exception:
-                    page_num = None
+                page_num = _resolve_page_number(reader, item[0])
                 out.append(
                     {"section": len(out) + 1, "title": title, "page": page_num, "depth": depth}
                 )
