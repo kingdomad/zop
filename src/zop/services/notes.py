@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import cast
 
 from zop.adapters.sqlite_reader import SqliteReader
-from zop.adapters.zotero_api import ApiCreds, ZoteroApi
+from zop.adapters.zotero_api import ApiCreds, ZoteroApi, zotero_failure_to_error
 from zop.core.errors import AuthError, ZopError
 
 
@@ -38,10 +38,14 @@ class NotesService:
         api = self._require_api()
         payload = [{"itemType": "note", "note": text, "parentItem": item_key}]
         async with api:
-            created = await api.create_items(payload)
-        if not created:
+            successful, failed_entries = await api.create_items(payload)
+        if not successful:
+            # Surface Zotero's real rejection reason (e.g. invalid parentItem)
+            # instead of a generic "rejected" (BUG-15).
+            if failed_entries:
+                raise zotero_failure_to_error(failed_entries[0]) from None
             raise ZopError("Note creation rejected by server")
-        return cast(str, created[0]["key"])
+        return cast(str, successful[0]["key"])
 
 
 __all__ = ["NotesService"]

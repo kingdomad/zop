@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from zop.adapters.zotero_api import ApiCreds
-from zop.core.errors import ZopError
+from zop.core.errors import ValidationError
 from zop.services.notes import NotesService
 
 
@@ -18,7 +18,7 @@ async def test_add_returns_new_note_key(
     fake_api: AsyncMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    fake_api.create_items.return_value = [{"key": "NOTE1", "version": 1}]
+    fake_api.create_items.return_value = ([{"key": "NOTE1", "version": 1}], [])
     monkeypatch.setattr(NotesService, "_require_api", lambda self: fake_api)
     svc = NotesService(db_path=fake_db, creds=creds)
 
@@ -35,9 +35,39 @@ async def test_add_raises_when_server_rejects(
     fake_api: AsyncMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    fake_api.create_items.return_value = []
+    fake_api.create_items.return_value = (
+        [],
+        [{"index": 0, "code": 400, "message": "'parentItem' must be a valid item key"}],
+    )
     monkeypatch.setattr(NotesService, "_require_api", lambda self: fake_api)
     svc = NotesService(db_path=fake_db, creds=creds)
 
-    with pytest.raises(ZopError):
+    with pytest.raises(ValidationError):
         await svc.add("PARENT1", "text")
+
+
+async def test_add_invalid_parent_surfaces_zotero_reason(
+    fake_db: Path,
+    creds: ApiCreds,
+    fake_api: AsyncMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """BUG-15: note add on a non-existent parent surfaces Zotero's real reason
+    (validation_error + message), not a generic zop_error that swallows it."""
+    fake_api.create_items.return_value = (
+        [],
+        [
+            {
+                "index": 0,
+                "code": 400,
+                "message": "'parentItem' must be a valid item key or false",
+            }
+        ],
+    )
+    monkeypatch.setattr(NotesService, "_require_api", lambda self: fake_api)
+    svc = NotesService(db_path=fake_db, creds=creds)
+
+    with pytest.raises(ValidationError) as exc:
+        await svc.add("NOEXIST999", "x")
+
+    assert "parentItem" in exc.value.message

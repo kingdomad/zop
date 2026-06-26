@@ -17,7 +17,14 @@ from typing import Any, cast
 import httpx
 
 from zop.core.concurrency import chunked
-from zop.core.errors import ApiError, AuthError, ConflictError, NotFoundError
+from zop.core.errors import (
+    ApiError,
+    AuthError,
+    ConflictError,
+    NotFoundError,
+    ValidationError,
+    ZopError,
+)
 
 _SENTINEL = object()
 
@@ -294,37 +301,89 @@ class ZoteroApi:
 
     async def create_items(
         self, payloads: Sequence[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """Create items via batch POST /items.
 
         Sends payloads as a single POST body (list), chunked at
-        ``BATCH_WRITE_LIMIT``. Returns the created item dicts extracted from
-        the server's ``successful`` envelope (each contains ``key``,
-        ``version``, etc.), in the order the server reports them.
+        ``BATCH_WRITE_LIMIT``.
 
-        Args:
-            payloads: Item template dicts (e.g.
-                ``[{"itemType": "journalArticle", "DOI": "..."}]``).
+        Returns ``(successful, failed)``:
 
-        Returns:
-            List of created items. Empty if the server rejected all entries;
-            the caller decides whether empty means an error.
+        - ``successful``: created item dicts from Zotero's ``successful``
+          envelope (each has ``key``, ``version``, …).
+        - ``failed``: ``{"index", "code", "message"}`` for entries Zotero
+          rejected. ``index`` is the position in ``payloads`` (global, across
+          batches), so a caller can map a failure back to its input.
+
+        Zotero answers with HTTP 200 even when some/all entries fail; whether
+        to raise vs. report per-item is the caller's call (see
+        :func:`zotero_failure_to_error`). This replaces the old behavior of
+        silently dropping the ``failed`` envelope (BUG-15).
         """
         if not payloads:
-            return []
-        results: list[dict[str, Any]] = []
+            return [], []
+        successful: list[dict[str, Any]] = []
+        failed: list[dict[str, Any]] = []
+        offset = 0
         for batch in chunked(list(payloads), self.BATCH_WRITE_LIMIT):
             resp = await self._client.post(self._items_url(), json=list(batch))
             data = self._check(resp)
-            if isinstance(data, dict):
-                created = data.get("successful", {})
-                if isinstance(created, dict):
-                    results.extend(created.values())
-                else:
-                    results.extend(created)
-            elif isinstance(data, list):
-                results.extend(data)
-        return results
+            envelope = data if isinstance(data, dict) else {}
+            succ = envelope.get("successful") or {}
+            if isinstance(succ, dict):
+                successful.extend(succ.values())
+            else:
+                successful.extend(succ)
+            fail = envelope.get("failed") or {}
+            if isinstance(fail, dict):
+                for idx, info in fail.items():
+                    failed.append(self._format_failure(idx, offset, info))
+            elif isinstance(fail, list):
+                for info in fail:
+                    failed.append(self._format_failure(None, offset, info))
+            offset += len(batch)
+        return successful, failed
+
+    @staticmethod
+    def _format_failure(idx: Any, offset: int, info: Any) -> dict[str, Any]:
+        """Normalize one Zotero failed-envelope entry into {index, code, message}."""
+        code: Any = None
+        message = ""
+        if isinstance(info, dict):
+            code = info.get("code")
+            message = str(info.get("message") or "")
+        try:
+            index = offset + int(idx)
+        except (TypeError, ValueError):
+            index = None
+        return {"index": index, "code": code, "message": message}
 
 
-__all__ = ["ApiCreds", "ZoteroApi"]
+def zotero_failure_to_error(failure: dict[str, Any]) -> ZopError:
+    """Map a Zotero failed-envelope entry to a ZopError subclass.
+
+    Zotero's ``code`` reuses HTTP status semantics (400 bad request,
+    409/412 conflict, 401/403 auth). The message is always preserved so the
+    underlying reason (e.g. "'parentItem' must be a valid item key") is never
+    swallowed. Unknown codes fall back to :class:`ApiError`.
+
+    Note: a parent-item-missing failure is Zotero 400 (bad request), not 404 —
+    it maps to ``ValidationError``, whereas ``tag add``'s pre-check GET yields
+    ``NotFoundError``. The two write paths hit different Zotero semantics.
+    """
+    raw_code = failure.get("code")
+    message = str(failure.get("message") or "") or "Zotero rejected the entry"
+    try:
+        status = int(raw_code) if raw_code is not None else 0
+    except (TypeError, ValueError):
+        status = 0
+    if status in (409, 412):
+        return ConflictError(message)
+    if status in (401, 403):
+        return AuthError(message)
+    if status == 400:
+        return ValidationError(message)
+    return ApiError(status, message)
+
+
+__all__ = ["ApiCreds", "ZoteroApi", "zotero_failure_to_error"]

@@ -159,12 +159,14 @@ def add_cmd(dois: tuple[str, ...], dois_file: str | None) -> None:
         raise click.UsageError("Provide --doi or --from-file")
     try:
         svc = _service()
-        created = asyncio.run(svc.add_many(items))
-        emit(
+        created, failures = asyncio.run(svc.add_many(items))
+        emit_batch(
             [it.model_dump() for it in created],
+            [(doi, err) for doi, err in failures],
             human=_human(),
-            count=len(created),
         )
+        if failures:
+            sys.exit(2)
     except ZopError as e:
         emit_error(e, human=_human())
         sys.exit(1)

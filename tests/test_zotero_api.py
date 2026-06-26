@@ -108,7 +108,9 @@ async def test_create_items_posts_list_and_parses_successful(creds: ApiCreds) ->
 
     assert seen["method"] == "POST"
     assert seen["body"] == [{"itemType": "journalArticle", "DOI": "10.x"}]
-    assert result == [{"key": "NEW1", "version": 1}]
+    successful, failed = result
+    assert successful == [{"key": "NEW1", "version": 1}]
+    assert failed == []
 
 
 async def test_create_items_empty_input_returns_empty_without_request(
@@ -122,20 +124,38 @@ async def test_create_items_empty_input_returns_empty_without_request(
         return httpx.Response(200, json={})
 
     async with ZoteroApi(creds, transport=httpx.MockTransport(handler)) as api:
-        result = await api.create_items([])
+        successful, failed = await api.create_items([])
 
-    assert result == []
+    assert successful == []
+    assert failed == []
     assert calls == 0  # short-circuit, no HTTP
 
 
-async def test_create_items_all_failed_returns_empty(creds: ApiCreds) -> None:
+async def test_create_items_surfaces_failed_envelope(creds: ApiCreds) -> None:
+    """create_items must surface Zotero's failed envelope (BUG-15), not silently
+    drop it. Each failure carries {index, code, message} so callers can map to a
+    ZopError. HTTP is 200 even when entries fail.
+    """
+
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"successful": {}, "failed": {"0": {}}})
+        return httpx.Response(
+            200,
+            json={
+                "successful": {"1": {"key": "OK000001", "version": 1}},
+                "failed": {
+                    "0": {"code": 400, "message": "'parentItem' must be a valid item key"}
+                },
+            },
+        )
 
     async with ZoteroApi(creds, transport=httpx.MockTransport(handler)) as api:
-        result = await api.create_items([{"DOI": "bad"}])
+        successful, failed = await api.create_items([{"DOI": "bad"}, {"DOI": "good"}])
 
-    assert result == []  # adapter does not raise on empty successful
+    assert [s["key"] for s in successful] == ["OK000001"]
+    assert len(failed) == 1
+    assert failed[0]["index"] == 0
+    assert failed[0]["code"] == 400
+    assert "parentItem" in failed[0]["message"]
 
 
 async def test_create_items_chunks_at_write_limit(creds: ApiCreds) -> None:
@@ -150,10 +170,39 @@ async def test_create_items_chunks_at_write_limit(creds: ApiCreds) -> None:
 
     payloads = [{"DOI": str(i)} for i in range(51)]  # BATCH_WRITE_LIMIT=50
     async with ZoteroApi(creds, transport=httpx.MockTransport(handler)) as api:
-        result = await api.create_items(payloads)
+        successful, failed = await api.create_items(payloads)
 
     assert posts == 2  # 50 + 1
-    assert len(result) == 51
+    assert len(successful) == 51
+    assert failed == []
+
+
+# ---- zotero_failure_to_error ----
+
+
+def test_zotero_failure_to_error_maps_codes() -> None:
+    """Zotero failed-envelope codes map to ZopError subclasses; message preserved."""
+    from zop.adapters.zotero_api import zotero_failure_to_error
+    from zop.core.errors import ApiError, AuthError, ConflictError, ValidationError
+
+    assert isinstance(
+        zotero_failure_to_error({"code": 400, "message": "bad"}), ValidationError
+    )
+    assert isinstance(
+        zotero_failure_to_error({"code": 409, "message": "conflict"}), ConflictError
+    )
+    assert isinstance(
+        zotero_failure_to_error({"code": 412, "message": "precondition"}), ConflictError
+    )
+    assert isinstance(
+        zotero_failure_to_error({"code": 401, "message": "auth"}), AuthError
+    )
+    # unknown code → ApiError, message still preserved
+    err = zotero_failure_to_error({"code": 500, "message": "boom"})
+    assert isinstance(err, ApiError)
+    assert "boom" in err.message
+    # missing message → sane default (non-empty)
+    assert zotero_failure_to_error({"code": 400}).message
 
 
 # ---- get_collection ----

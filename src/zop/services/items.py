@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from zop.adapters.sqlite_reader import SqliteReader
-from zop.adapters.zotero_api import ApiCreds, ZoteroApi
+from zop.adapters.zotero_api import ApiCreds, ZoteroApi, zotero_failure_to_error
 from zop.core.errors import AuthError, NotFoundError, ZopError
 from zop.models.common import ItemType
 from zop.models.item import Item, ItemSummary, parse_year
@@ -116,7 +116,7 @@ class ItemsService:
             await api.delete_item(key, version=current["version"])
 
     async def add_by_doi(self, doi: str, *, collection_keys: Sequence[str] | None = None) -> Item:
-        """Create an item from a DOI. Uses Zotero's translation API endpoint."""
+        """Create an item from a DOI via batch POST /items."""
         api = self._require_api()
         payload: dict[str, object] = {
             "itemType": "journalArticle",  # default; server may override
@@ -124,21 +124,39 @@ class ItemsService:
             "collections": list(collection_keys or []),
         }
         async with api:
-            created = await api.create_items([payload])
-        if not created:
-            raise ZopError(f"DOI '{doi}' not found or rejected by server")
-        return await self._item_after_create(created[0])
+            successful, failed_entries = await api.create_items([payload])
+        if not successful:
+            # Surface Zotero's real rejection reason instead of a generic message (BUG-15).
+            if failed_entries:
+                raise zotero_failure_to_error(failed_entries[0]) from None
+            raise ZopError(f"DOI '{doi}' rejected by server")
+        return await self._item_after_create(successful[0])
 
-    async def add_many(self, dois: Sequence[str]) -> list[Item]:
-        """Add multiple items by DOI in a single batched POST."""
+    async def add_many(
+        self, dois: Sequence[str]
+    ) -> tuple[list[Item], list[tuple[str, ZopError]]]:
+        """Add multiple items by DOI in a single batched POST.
+
+        Returns ``(created, failed)``. ``failed`` is ``(doi, ZopError)`` per
+        rejected DOI — never silently dropped (BUG-15). Each failure is mapped
+        from Zotero's ``failed`` envelope via :func:`zotero_failure_to_error`.
+        """
         api = self._require_api()
-        payload = [
-            {"itemType": "journalArticle", "DOI": doi}
-            for doi in dois
-        ]
+        dois_list = list(dois)
+        payload = [{"itemType": "journalArticle", "DOI": doi} for doi in dois_list]
         async with api:
-            created = await api.create_items(payload)
-        return [await self._item_after_create(c) for c in created if c.get("key")]
+            successful, failed_entries = await api.create_items(payload)
+        created = [await self._item_after_create(c) for c in successful if c.get("key")]
+        failures: list[tuple[str, ZopError]] = []
+        for entry in failed_entries:
+            idx = entry.get("index")
+            doi = (
+                dois_list[idx]
+                if isinstance(idx, int) and 0 <= idx < len(dois_list)
+                else "?"
+            )
+            failures.append((doi, zotero_failure_to_error(entry)))
+        return created, failures
 
     async def _item_after_create(self, created: dict[str, Any]) -> Item:
         """Return the created item: local DB if synced, else from API response.
