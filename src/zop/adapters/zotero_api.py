@@ -16,6 +16,7 @@ from typing import Any, cast
 
 import httpx
 
+from zop._version import __version__
 from zop.core.concurrency import chunked
 from zop.core.errors import (
     ApiError,
@@ -40,7 +41,7 @@ class ZoteroApi:
     """Thin async wrapper over the Zotero Web API."""
 
     BASE_URL = "https://api.zotero.org"
-    USER_AGENT = "zop/0.1 (+https://github.com/anomalyco/zop)"
+    USER_AGENT = f"zop/{__version__} (+https://github.com/kingdomad/zop)"
 
     # API limits per Zotero docs
     BATCH_WRITE_LIMIT = 50  # max objects per POST/PATCH

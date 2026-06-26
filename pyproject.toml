@@ -32,8 +32,8 @@ dependencies = [
 zop = "zop.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/anomalyco/zop"
-Issues = "https://github.com/anomalyco/zop/issues"
+Homepage = "https://github.com/kingdomad/zop"
+Issues = "https://github.com/kingdomad/zop/issues"
 
 [build-system]
 requires = ["hatchling"]
