@@ -107,7 +107,7 @@ For every flag of any command, run `zop <command> --help` rather than guessing.
 
 - **Gather state with reads first** — they are offline and fast; resolve names/keys before any write.
 - **For multi-step reorgs, author a plan and `--dry-run`** — let zop validate conflicts; don't reimplement the checks.
-- **Batch writes isolate failures**: `collection move`, `tag add/remove`, and `item delete` return per-item success/failure in one envelope and don't abort the batch. Report which keys failed from the `failed` array; exit code `2` means partial failure.
+- **Batch writes isolate failures**: `collection move`, `tag add/remove`, `item add` (by DOI), and `item delete` return per-item success/failure in one envelope and don't abort the batch. Report which keys failed from the `failed` array; exit code `2` means partial failure. `item add` reports per-DOI failures — a DOI Zotero rejects shows up in `failed`, not a silent empty `succeeded:[]`.
 - **Versions matter for writes**: if a write fails with `conflict`, the item changed server-side — re-read and retry rather than looping blindly.
 - **Reads lag writes briefly**: writes hit the Web API, reads use the local SQLite snapshot. A just-created collection/item isn't visible to read commands until Zotero syncs it (seconds to minutes). To chain creates, pass the returned KEY (e.g. `--parent <KEY>`) rather than the new NAME — or rely on the NAME→API fallback.
 - **stats vs recent count differently**: `stats` is a full overview — it counts annotations/highlights in `total_items` and `by_type`. `recent`/`search`/`duplicates` list only bibliographic items (annotations have no title, so they'd be empty noise in a list). Don't expect the two counts to match.
